@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance Dashboard — MIVA Maintenance</title>
+    <meta name="description" content="Maintenance officer operations dashboard for managing and completing assigned maintenance jobs at MIVA Open University.">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <nav>
+        <h1>Maintenance Operations</h1>
+        <button class="btn-logout" onclick="logout()">Logout</button>
+    </nav>
+    <main>
+        <div id="alertBox" class="alert"></div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Assigned Jobs</h2>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="maintenanceTableBody"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        verifyAccess(2); // Role 2 = Maintenance Officer[cite: 1]
+
+        // Check if password change is required
+        checkForceChangePassword();
+
+        async function loadJobs() {
+            const data = await apiGet("/requests/");
+            const tbody = document.getElementById("maintenanceTableBody");
+            if (!data || data.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="4">
+                        <div class="empty-state">
+                            <div class="empty-icon">🔧</div>
+                            <p>No assigned jobs at this time.</p>
+                        </div>
+                    </td></tr>`;
+                return;
+            }
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td>#${r.id}</td>
+                    <td>${r.title}</td>
+                    <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
+                    <td>
+                        <button class="btn-success" style="padding: 0.3rem 0.6rem;" onclick="markComplete(${r.id})">Mark Completed</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function markComplete(id) {
+            const res = await fetch(`${API_URL}/admin/requests/${id}/status?new_status=Completed`, {
+                method: "PATCH", headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+            });
+            if (res.ok) { showAlert("Job marked complete."); loadJobs(); }
+        }
+        loadJobs();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard — MIVA Maintenance</title>
+    <meta name="description" content="Administrator console for managing users, service requests, and maintenance operations at MIVA Open University.">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <nav>
+        <h1>Administrator Console</h1>
+        <button class="btn-logout" onclick="logout()">Logout</button>
+    </nav>
+
+    <main>
+        <div id="alertBox" class="alert"></div>
+
+        <!-- Tabbed Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('requests', this)" id="tab-requests">
+                <span class="tab-icon">📋</span> Service Requests
+            </button>
+            <button class="tab-btn" onclick="switchTab('users', this)" id="tab-users">
+                <span class="tab-icon">👥</span> User Management
+            </button>
+        </div>
+
+        <!-- ========================================
+             TAB 1: Service Requests
+             ======================================== -->
+        <div id="tab-content-requests" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Master Service Requests</h2>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Assign Officer</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ========================================
+             TAB 2: User Management
+             ======================================== -->
+        <div id="tab-content-users" class="tab-content">
+            <!-- Stats Cards -->
+            <div class="stats-row" id="userStats">
+                <div class="stat-card">
+                    <div class="stat-number" id="statTotal">—</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="statAdmins">—</div>
+                    <div class="stat-label">Administrators</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="statOfficers">—</div>
+                    <div class="stat-label">Maintenance Officers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="statStudents">—</div>
+                    <div class="stat-label">Students / Staff</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>All Users</h2>
+                    <button class="btn-success" onclick="openModal('createUserModal')">+ Create Account</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state">
+                                    <div class="empty-icon">👥</div>
+                                    <p>Loading users...</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- ========================================
+         Create User Modal
+         ======================================== -->
+    <div id="createUserModal" class="modal">
+        <div class="modal-content" style="width: 460px;">
+            <h3 style="margin-bottom: 0.3rem; color: #1e3a8a;">Create New Account</h3>
+            <p style="color: #6b7280; font-size: 0.85rem; margin-bottom: 1.5rem;">
+                Set up a new user account for a student, staff member, or maintenance officer.
+            </p>
+
+            <form onsubmit="handleCreateUser(event)" id="createUserForm">
+                <div class="form-group">
+                    <label for="newFullName">Full Name</label>
+                    <input type="text" id="newFullName" class="form-control" placeholder="e.g. John Doe" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="newEmail">Email Address</label>
+                    <input type="email" id="newEmail" class="form-control" placeholder="e.g. john.doe@miva.university" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="newPassword">Password</label>
+                    <div class="password-group">
+                        <input type="text" id="newPassword" class="form-control" placeholder="Enter or generate a password" required>
+                        <button type="button" class="btn-generate" onclick="generatePassword()">🎲 Generate</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="newRole">Assign Role</label>
+                    <select id="newRole" class="form-control" required>
+                        <option value="" disabled selected>— Select a role —</option>
+                    </select>
+                </div>
+
+                <div class="toggle-group">
+                    <label for="sendEmailToggle">Send welcome email with credentials</label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="sendEmailToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
+                    <button type="submit" class="btn-primary" style="width: auto;" id="btnCreateUser">Create Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================
+         Reset Password Modal
+         ======================================== -->
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content" style="width: 440px;">
+            <h3 style="margin-bottom: 0.3rem; color: #1e3a8a;">🔑 Reset Password</h3>
+            <p style="color: #6b7280; font-size: 0.85rem; margin-bottom: 1rem;">
+                Set a new password for <strong id="resetUserName"></strong>
+            </p>
+
+            <div id="resetPasswordResult" style="display: none;"></div>
+
+            <form onsubmit="handleResetPassword(event)" id="resetPasswordForm">
+                <input type="hidden" id="resetUserId">
+                <div class="form-group">
+                    <label for="resetNewPassword">New Password</label>
+                    <div class="password-group">
+                        <input type="text" id="resetNewPassword" class="form-control" placeholder="Enter or generate a password" required>
+                        <button type="button" class="btn-generate" onclick="generateResetPassword()">🎲 Generate</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn-secondary" onclick="closeResetModal()">Close</button>
+                    <button type="submit" class="btn-primary" style="width: auto;" id="btnResetPassword">Reset Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+    <script>
+        verifyAccess(1); // Role 1 = Administrator
+
+        // ── Cached Data ──
+        let allRoles = [];
+        let allUsers = [];
+        let allOfficers = [];
+
+        // ── Tab Switching ──
+        function switchTab(tabName, btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(`tab-content-${tabName}`).classList.add('active');
+
+            if (tabName === 'users') {
+                loadUsers();
+            } else if (tabName === 'requests') {
+                loadAdminRequests();
+            }
+        }
+
+        // ══════════════════════════════════════════
+        // SERVICE REQUESTS TAB
+        // ══════════════════════════════════════════
+
+        async function loadAdminRequests() {
+            const data = await apiGet("/requests/");
+            const tbody = document.getElementById("adminTableBody");
+            if (!data || data.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="4">
+                        <div class="empty-state">
+                            <div class="empty-icon">📋</div>
+                            <p>No service requests found.</p>
+                        </div>
+                    </td></tr>`;
+                return;
+            }
+            tbody.innerHTML = data.map(r => {
+                // Build the officer dropdown for this request
+                const officerOptions = allOfficers.map(o => 
+                    `<option value="${o.id}">${o.full_name}</option>`
+                ).join('');
+                
+                return `
+                    <tr>
+                        <td>#${r.id}</td>
+                        <td>${r.title}</td>
+                        <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
+                        <td>
+                            <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                <select id="officer_${r.id}" class="form-control" style="width: 160px; display: inline-block; font-size: 0.85rem;">
+                                    <option value="" disabled selected>Select officer</option>
+                                    ${officerOptions}
+                                </select>
+                                <button class="btn-primary" style="width: auto; padding: 0.4rem 0.8rem;" onclick="assign(${r.id})">Assign</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function assign(reqId) {
+            const select = document.getElementById(`officer_${reqId}`);
+            const officerId = parseInt(select.value);
+            if (!officerId) {
+                showAlert("Please select an officer first.", false);
+                return;
+            }
+            const res = await fetch(`${API_URL}/admin/assign`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("token")}` },
+                body: JSON.stringify({ request_id: reqId, officer_id: officerId })
+            });
+            if (res.ok) { 
+                const officerName = select.options[select.selectedIndex].text;
+                showAlert(`Request assigned to ${officerName}.`); 
+                loadAdminRequests(); 
+            } else {
+                const data = await res.json();
+                showAlert(data.detail || "Failed to assign officer.", false);
+            }
+        }
+
+        // ══════════════════════════════════════════
+        // USER MANAGEMENT TAB
+        // ══════════════════════════════════════════
+
+        async function loadRoles() {
+            try {
+                allRoles = await apiGet("/admin/roles");
+                const select = document.getElementById("newRole");
+                select.innerHTML = '<option value="" disabled selected>— Select a role —</option>';
+                allRoles.forEach(role => {
+                    const option = document.createElement("option");
+                    option.value = role.id;
+                    option.textContent = role.name;
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                console.error("Failed to load roles:", e);
+            }
+        }
+
+        async function loadOfficers() {
+            try {
+                allOfficers = await apiGet("/admin/officers");
+            } catch (e) {
+                console.error("Failed to load officers:", e);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                allUsers = await apiGet("/admin/users");
+                renderUsersTable(allUsers);
+                updateStats(allUsers);
+            } catch (e) {
+                console.error("Failed to load users:", e);
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById("usersTableBody");
+
+            if (!users || users.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="6">
+                        <div class="empty-state">
+                            <div class="empty-icon">👥</div>
+                            <p>No users found. Create the first account!</p>
+                        </div>
+                    </td></tr>`;
+                return;
+            }
+
+            // Get current user's ID from the JWT
+            const token = localStorage.getItem("token");
+            let currentUserId = null;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                // Find the current user by email
+                const me = users.find(u => u.email === payload.sub);
+                if (me) currentUserId = me.id;
+            } catch (e) {}
+
+            tbody.innerHTML = users.map(u => {
+                const roleName = u.role ? u.role.name : 'Unknown';
+                const badgeClass = getRoleBadgeClass(roleName);
+                const isCurrentUser = u.id === currentUserId;
+                
+                // Status badge
+                const statusBadge = u.is_active 
+                    ? '<span class="badge badge-active">Active</span>'
+                    : '<span class="badge badge-suspended">Suspended</span>';
+                
+                // Action buttons (don't show for current user)
+                const suspendBtn = isCurrentUser ? '' : (u.is_active
+                    ? `<button class="btn-action suspend" onclick="confirmSuspend(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">⏸️ Suspend</button>`
+                    : `<button class="btn-action reactivate" onclick="confirmReactivate(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">▶️ Reactivate</button>`
+                );
+                
+                const actions = isCurrentUser 
+                    ? '<span style="color: #9ca3af; font-size: 0.8rem;">You</span>'
+                    : `<div class="action-group">
+                        <button class="btn-action reset" onclick="openResetPasswordModal(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">🔑 Reset</button>
+                        ${suspendBtn}
+                        <button class="btn-action delete" onclick="confirmDelete(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">🗑️ Delete</button>
+                    </div>`;
+
+                return `
+                    <tr${!u.is_active ? ' style="opacity: 0.6;"' : ''}>
+                        <td>#${u.id}</td>
+                        <td>${u.full_name}${u.must_change_password ? ' <span style="font-size: 0.7rem; color: #f59e0b;" title="Must change password">🔒</span>' : ''}</td>
+                        <td>${u.email}</td>
+                        <td><span class="badge ${badgeClass}">${roleName}</span></td>
+                        <td>${statusBadge}</td>
+                        <td>${actions}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getRoleBadgeClass(roleName) {
+            const name = roleName.toLowerCase();
+            if (name.includes('admin')) return 'badge-administrator';
+            if (name.includes('maintenance')) return 'badge-maintenance';
+            return 'badge-student';
+        }
+
+        function updateStats(users) {
+            document.getElementById("statTotal").textContent = users.length;
+            document.getElementById("statAdmins").textContent = users.filter(u => u.role && u.role.name.toLowerCase().includes('admin')).length;
+            document.getElementById("statOfficers").textContent = users.filter(u => u.role && u.role.name.toLowerCase().includes('maintenance')).length;
+            document.getElementById("statStudents").textContent = users.filter(u => u.role && u.role.name.toLowerCase().includes('student')).length;
+        }
+
+        // ── Create User ──
+        async function handleCreateUser(e) {
+            e.preventDefault();
+            const btn = document.getElementById("btnCreateUser");
+            btn.disabled = true;
+            btn.textContent = "Creating...";
+
+            const payload = {
+                full_name: document.getElementById("newFullName").value.trim(),
+                email: document.getElementById("newEmail").value.trim(),
+                password: document.getElementById("newPassword").value,
+                role_id: parseInt(document.getElementById("newRole").value),
+                send_email: document.getElementById("sendEmailToggle").checked
+            };
+
+            try {
+                const res = await fetch(`${API_URL}/admin/users`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    closeModal("createUserModal");
+                    document.getElementById("createUserForm").reset();
+                    document.getElementById("sendEmailToggle").checked = true;
+
+                    const roleName = allRoles.find(r => r.id === payload.role_id)?.name || "User";
+                    const emailMsg = payload.send_email
+                        ? `A welcome email has been sent to <strong>${payload.email}</strong>.`
+                        : `No email was sent. Please share the credentials manually.`;
+
+                    showSuccessOverlay(payload.full_name, roleName, emailMsg);
+                    loadUsers();
+                    loadOfficers(); // Refresh officers list in case a new one was added
+                } else {
+                    showAlert(data.detail || "Failed to create account.", false);
+                }
+            } catch (err) {
+                showAlert("Network error. Please check your connection.", false);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Create Account";
+            }
+        }
+
+        function showSuccessOverlay(name, role, emailMsg) {
+            const overlay = document.createElement("div");
+            overlay.className = "success-overlay";
+            overlay.innerHTML = `
+                <div class="success-card">
+                    <div class="success-icon">✓</div>
+                    <h3>Account Created!</h3>
+                    <p><strong>${name}</strong> has been registered as a <strong>${role}</strong>.</p>
+                    <p style="margin-top: 0.5rem;">${emailMsg}</p>
+                    <p style="margin-top: 0.5rem; font-size: 0.8rem; color: #f59e0b;">🔒 User will be asked to change their password on first login.</p>
+                    <button class="btn-primary" onclick="this.closest('.success-overlay').remove()">Done</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 10000);
+        }
+
+        // ── Password Generator ──
+        function generatePassword() {
+            document.getElementById("newPassword").value = _generateRandomPassword();
+        }
+
+        function generateResetPassword() {
+            document.getElementById("resetNewPassword").value = _generateRandomPassword();
+        }
+
+        function _generateRandomPassword() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+            let password = '';
+            password += 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)];
+            password += 'abcdefghjkmnpqrstuvwxyz'[Math.floor(Math.random() * 23)];
+            password += '23456789'[Math.floor(Math.random() * 8)];
+            password += '!@#$%'[Math.floor(Math.random() * 5)];
+            for (let i = 4; i < 12; i++) {
+                password += chars[Math.floor(Math.random() * chars.length)];
+            }
+            return password.split('').sort(() => Math.random() - 0.5).join('');
+        }
+
+        // ══════════════════════════════════════════
+        // RESET PASSWORD
+        // ══════════════════════════════════════════
+
+        function openResetPasswordModal(userId, userName) {
+            document.getElementById("resetUserId").value = userId;
+            document.getElementById("resetUserName").textContent = userName;
+            document.getElementById("resetNewPassword").value = "";
+            document.getElementById("resetPasswordResult").style.display = "none";
+            document.getElementById("resetPasswordForm").style.display = "block";
+            document.getElementById("btnResetPassword").style.display = "inline-block";
+            openModal("resetPasswordModal");
+        }
+
+        function closeResetModal() {
+            closeModal("resetPasswordModal");
+            document.getElementById("resetPasswordResult").style.display = "none";
+            document.getElementById("resetPasswordForm").style.display = "block";
+        }
+
+        async function handleResetPassword(e) {
+            e.preventDefault();
+            const userId = document.getElementById("resetUserId").value;
+            const newPassword = document.getElementById("resetNewPassword").value;
+            const btn = document.getElementById("btnResetPassword");
+
+            btn.disabled = true;
+            btn.textContent = "Resetting...";
+
+            try {
+                const res = await fetch(`${API_URL}/admin/users/${userId}/reset-password`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    },
+                    body: JSON.stringify({ new_password: newPassword })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    // Show the password in a copy-friendly display
+                    const resultDiv = document.getElementById("resetPasswordResult");
+                    resultDiv.innerHTML = `
+                        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                            <p style="color: #065f46; font-weight: 600; margin-bottom: 0.5rem;">✅ Password Reset Successfully</p>
+                            <p style="color: #6b7280; font-size: 0.85rem; margin-bottom: 0.75rem;">New password for this user:</p>
+                            <div class="password-display">
+                                <span class="password-text" id="resetPasswordText">${data.new_password}</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyPassword('${data.new_password}', this)">📋 Copy Password</button>
+                            <p style="color: #f59e0b; font-size: 0.78rem; margin-top: 0.5rem;">🔒 User will be required to change this password on next login.</p>
+                        </div>
+                    `;
+                    resultDiv.style.display = "block";
+                    
+                    // Hide the form since it's done
+                    document.getElementById("resetPasswordForm").querySelector('.form-group').style.display = 'none';
+                    btn.style.display = 'none';
+                    
+                    loadUsers(); // Refresh to show the 🔒 indicator
+                } else {
+                    showAlert(data.detail || "Failed to reset password.", false);
+                }
+            } catch (err) {
+                showAlert("Network error. Please try again.", false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Reset Password";
+            }
+        }
+
+        function copyPassword(password, btn) {
+            navigator.clipboard.writeText(password).then(() => {
+                btn.classList.add('copied');
+                btn.innerHTML = '✅ Copied!';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '📋 Copy Password';
+                }, 2000);
+            });
+        }
+
+        // ══════════════════════════════════════════
+        // SUSPEND / REACTIVATE
+        // ══════════════════════════════════════════
+
+        function confirmSuspend(userId, userName) {
+            showConfirmDialog({
+                icon: '⏸️',
+                title: 'Suspend Account?',
+                message: `Are you sure you want to suspend <strong>${userName}</strong>? They will not be able to log in until reactivated.`,
+                confirmText: 'Suspend',
+                confirmClass: 'btn-confirm-warning',
+                onConfirm: () => toggleSuspend(userId)
+            });
+        }
+
+        function confirmReactivate(userId, userName) {
+            showConfirmDialog({
+                icon: '▶️',
+                title: 'Reactivate Account?',
+                message: `Reactivate <strong>${userName}</strong>'s account? They will be able to log in again.`,
+                confirmText: 'Reactivate',
+                confirmClass: 'btn-confirm-warning',
+                onConfirm: () => toggleSuspend(userId)
+            });
+        }
+
+        async function toggleSuspend(userId) {
+            try {
+                const res = await fetch(`${API_URL}/admin/users/${userId}/suspend`, {
+                    method: "PATCH",
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showAlert(data.message);
+                    loadUsers();
+                    loadOfficers();
+                } else {
+                    showAlert(data.detail || "Failed to update account status.", false);
+                }
+            } catch (err) {
+                showAlert("Network error.", false);
+            }
+        }
+
+        // ══════════════════════════════════════════
+        // DELETE USER
+        // ══════════════════════════════════════════
+
+        function confirmDelete(userId, userName) {
+            showConfirmDialog({
+                icon: '🗑️',
+                title: 'Delete Account?',
+                message: `This will <strong>permanently delete</strong> <strong>${userName}</strong>'s account and cannot be undone.`,
+                confirmText: 'Delete Permanently',
+                confirmClass: 'btn-confirm-danger',
+                onConfirm: () => deleteUser(userId)
+            });
+        }
+
+        async function deleteUser(userId) {
+            try {
+                const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showAlert(data.message);
+                    loadUsers();
+                    loadOfficers();
+                } else {
+                    showAlert(data.detail || "Failed to delete account.", false);
+                }
+            } catch (err) {
+                showAlert("Network error.", false);
+            }
+        }
+
+        // ══════════════════════════════════════════
+        // CONFIRMATION DIALOG
+        // ══════════════════════════════════════════
+
+        function showConfirmDialog({ icon, title, message, confirmText, confirmClass, onConfirm }) {
+            const overlay = document.createElement("div");
+            overlay.className = "confirm-overlay";
+            overlay.innerHTML = `
+                <div class="confirm-card">
+                    <div class="confirm-icon">${icon}</div>
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="confirm-actions">
+                        <button class="btn-confirm-cancel" onclick="this.closest('.confirm-overlay').remove()">Cancel</button>
+                        <button class="${confirmClass}" id="confirmActionBtn">${confirmText}</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            document.getElementById("confirmActionBtn").addEventListener("click", () => {
+                overlay.remove();
+                onConfirm();
+            });
+        }
+
+        // ══════════════════════════════════════════
+        // INITIALIZE
+        // ══════════════════════════════════════════
+
+        async function initAdmin() {
+            await loadOfficers(); // Load officers first so the dropdown is ready
+            await loadRoles();
+            loadAdminRequests();
+        }
+
+        initAdmin();
+    </script>
+</body>
+
+</html>
