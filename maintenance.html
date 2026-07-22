@@ -6,13 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maintenance Dashboard — MIVA Maintenance</title>
     <meta name="description" content="Maintenance officer operations dashboard for managing and completing assigned maintenance jobs at MIVA Open University.">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 
 <body>
     <nav>
         <h1>Maintenance Operations</h1>
-        <button class="btn-logout" onclick="logout()">Logout</button>
+        <div class="nav-right">
+            <span id="navUserGreeting" class="nav-greeting"></span>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
     </nav>
     <main>
         <div id="alertBox" class="alert"></div>
@@ -25,7 +28,11 @@
                     <tr>
                         <th>ID</th>
                         <th>Title</th>
+                        <th>Requested By</th>
+                        <th>Category</th>
+                        <th>Priority</th>
                         <th>Status</th>
+                        <th>Last Update</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -34,44 +41,204 @@
         </div>
     </main>
 
-    <script src="js/app.js"></script>
+    <!-- ========================================
+         Mark Complete Modal
+         ======================================== -->
+    <div id="completeModal" class="modal">
+        <div class="modal-content" style="width: 480px;">
+            <h3 style="margin-bottom: 0.3rem; color: #1e3a8a;">Mark Job as Completed</h3>
+            <p style="color: #6b7280; font-size: 0.85rem; margin-bottom: 1.5rem;">
+                Add a completion note before closing this job. This will be recorded in the audit log.
+            </p>
+
+            <input type="hidden" id="completeRequestId">
+
+            <div class="form-group">
+                <label for="completeJobTitle" style="font-weight:600; color:#374151;">Job</label>
+                <div id="completeJobTitle" style="padding: 0.5rem 0.75rem; background:#f3f4f6; border-radius:8px; font-size:0.9rem; color:#1f2937; margin-top:0.25rem;"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="completeComment">Completion Comment <span style="color:#9ca3af; font-weight:400;">(required)</span></label>
+                <textarea id="completeComment" class="form-control" rows="4"
+                    placeholder="Describe what was done, parts used, time taken, etc." required></textarea>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
+                <button type="button" class="btn-secondary" onclick="closeModal('completeModal')">Cancel</button>
+                <button type="button" class="btn-success" id="btnConfirmComplete" onclick="confirmComplete()">
+                    Confirm Complete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js?v=4"></script>
     <script>
-        verifyAccess(2); // Role 2 = Maintenance Officer[cite: 1]
+        verifyAccess(2); // Role 2 = Maintenance Officer
+        displayUserName();
 
         // Check if password change is required
         checkForceChangePassword();
 
-        async function loadJobs() {
-            const data = await apiGet("/requests/");
-            const tbody = document.getElementById("maintenanceTableBody");
-            if (!data || data.length === 0) {
-                tbody.innerHTML = `
-                    <tr><td colspan="4">
-                        <div class="empty-state">
-                            <div class="empty-icon">🔧</div>
-                            <p>No assigned jobs at this time.</p>
-                        </div>
-                    </td></tr>`;
-                return;
-            }
-            tbody.innerHTML = data.map(r => `
-                <tr>
-                    <td>#${r.id}</td>
-                    <td>${r.title}</td>
-                    <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
-                    <td>
-                        <button class="btn-success" style="padding: 0.3rem 0.6rem;" onclick="markComplete(${r.id})">Mark Completed</button>
-                    </td>
-                </tr>
-            `).join('');
+        const CATEGORY_MAP = { 1: 'Electricity', 2: 'Furniture', 3: 'Plumbing', 4: 'Internet/IT' };
+
+        function getPriorityBadge(priority) {
+            const cls = {
+                'High':   'badge-priority-high',
+                'Medium': 'badge-priority-medium',
+                'Low':    'badge-priority-low'
+            }[priority] || 'badge-priority-medium';
+            return `<span class="badge ${cls}">${priority || 'Medium'}</span>`;
         }
 
-        async function markComplete(id) {
-            const res = await fetch(`${API_URL}/admin/requests/${id}/status?new_status=Completed`, {
-                method: "PATCH", headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-            });
-            if (res.ok) { showAlert("Job marked complete."); loadJobs(); }
+        function getLastLog(logs) {
+            if (!logs || logs.length === 0) return null;
+            return logs[logs.length - 1];
         }
+
+        function formatLastUpdate(logs) {
+            const log = getLastLog(logs);
+            if (!log) return '<span style="color:#9ca3af; font-size:0.8rem;">—</span>';
+
+            const updater = log.updater_name || `Officer #${log.updated_by}`;
+            const ts = new Date(log.timestamp);
+            const date = ts.toLocaleDateString();
+            const time = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const comment = log.comments
+                ? `<div style="margin-top:0.3rem; font-size:0.78rem; color:#6b7280; font-style:italic; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${log.comments.replace(/"/g, '&quot;')}">${log.comments}</div>`
+                : '';
+
+            return `
+                <div style="font-size:0.82rem; line-height:1.4;">
+                    <div><span style="font-weight:600;">${updater}</span></div>
+                    <div style="color:#6b7280;">${date} ${time}</div>
+                    ${comment}
+                </div>`;
+        }
+
+        async function loadJobs() {
+            try {
+                const data = await apiGet("/requests/");
+                if (!Array.isArray(data)) {
+                    if (data && data.detail) {
+                        showAlert(data.detail, false);
+                    }
+                    const tbody = document.getElementById("maintenanceTableBody");
+                    tbody.innerHTML = `
+                        <tr><td colspan="8">
+                            <div class="empty-state">
+                                <div class="empty-icon">🔧</div>
+                                <p>No assigned jobs at this time.</p>
+                            </div>
+                        </td></tr>`;
+                    return;
+                }
+                cacheRequestsData(data);
+                const tbody = document.getElementById("maintenanceTableBody");
+                if (data.length === 0) {
+                    tbody.innerHTML = `
+                        <tr><td colspan="8">
+                            <div class="empty-state">
+                                <div class="empty-icon">🔧</div>
+                                <p>No assigned jobs at this time.</p>
+                            </div>
+                        </td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = data.map(r => {
+                    const categoryName = r.category ? r.category.name : (CATEGORY_MAP[r.category_id] || `Cat #${r.category_id}`);
+                    const statusText = r.status || 'Pending';
+                    const statusCls = statusText.toLowerCase().replace(/ /g, '-');
+                    const isCompleted = statusText === 'Completed';
+
+                    const requesterName = r.requester_name
+                        ? `<span style="font-size:0.85rem; font-weight:600; color:#374151;">${r.requester_name}</span>`
+                        : `<span style="color:#9ca3af; font-size:0.82rem;">User #${r.requester_id}</span>`;
+
+                    const completeBtn = isCompleted
+                        ? `<span style="color:#10b981; font-size:0.82rem; font-weight:600;">Done</span>`
+                        : `<button class="btn-success" style="padding:0.3rem 0.6rem; font-size:0.82rem;"
+                               onclick="openCompleteModal(${r.id}, '${r.title.replace(/'/g, "\\'")}')">Mark Complete</button>`;
+
+                    const actionBtns = `
+                        <div style="display:flex; gap:0.4rem; align-items:center;">
+                            ${completeBtn}
+                            <button class="btn-secondary" style="padding:0.3rem 0.6rem; font-size:0.82rem;" onclick="openRequestDetailsModal(${r.id})">Details</button>
+                        </div>
+                    `;
+
+                    return `
+                    <tr${isCompleted ? ' style="opacity:0.75;"' : ''}>
+                        <td>#${r.id}</td>
+                        <td>
+                            <a href="javascript:void(0)" onclick="openRequestDetailsModal(${r.id})" 
+                               style="color: #1e3a8a; text-decoration: none; cursor: pointer;" 
+                               title="Click to view details"
+                               onmouseover="this.style.textDecoration='underline'" 
+                               onmouseout="this.style.textDecoration='none'">
+                                <strong>${r.title}</strong>
+                            </a>
+                        </td>
+                        <td>${requesterName}</td>
+                        <td><span class="badge badge-category">${categoryName}</span></td>
+                        <td>${getPriorityBadge(r.priority)}</td>
+                        <td><span class="badge badge-${statusCls}">${statusText}</span></td>
+                        <td>${formatLastUpdate(r.logs)}</td>
+                        <td>${actionBtns}</td>
+                    </tr>`;
+                }).join('');
+            } catch (err) {
+                console.error("Failed to load maintenance jobs:", err);
+            }
+        }
+
+        // ── Complete Modal ──
+        function openCompleteModal(id, title) {
+            document.getElementById('completeRequestId').value = id;
+            document.getElementById('completeJobTitle').textContent = title;
+            document.getElementById('completeComment').value = '';
+            openModal('completeModal');
+        }
+
+        async function confirmComplete() {
+            const id = document.getElementById('completeRequestId').value;
+            const comment = document.getElementById('completeComment').value.trim();
+
+            if (!comment) {
+                document.getElementById('completeComment').focus();
+                document.getElementById('completeComment').style.borderColor = '#ef4444';
+                setTimeout(() => document.getElementById('completeComment').style.borderColor = '', 2000);
+                return;
+            }
+
+            const btn = document.getElementById('btnConfirmComplete');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                const params = new URLSearchParams({ new_status: 'Completed', comments: comment });
+                const res = await fetch(`${API_URL}/admin/requests/${id}/status?${params}`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                if (res.ok) {
+                    closeModal('completeModal');
+                    showAlert('Job marked complete. Comment saved to audit log.');
+                    loadJobs();
+                } else {
+                    const data = await res.json();
+                    showAlert(data.detail || 'Failed to update status.', false);
+                }
+            } catch (err) {
+                showAlert('Network error. Please try again.', false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✅ Confirm Complete';
+            }
+        }
+
         loadJobs();
     </script>
 </body>

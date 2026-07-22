@@ -5,14 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard — MIVA Maintenance</title>
-    <meta name="description" content="Administrator console for managing users, service requests, and maintenance operations at MIVA Open University.">
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="description"
+        content="Administrator console for managing users, service requests, and maintenance operations at MIVA Open University.">
+    <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 
 <body>
     <nav>
         <h1>Administrator Console</h1>
-        <button class="btn-logout" onclick="logout()">Logout</button>
+        <div class="nav-right">
+            <span id="navUserGreeting" class="nav-greeting"></span>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
     </nav>
 
     <main>
@@ -41,7 +45,11 @@
                         <tr>
                             <th>ID</th>
                             <th>Title</th>
+                            <th>Requested By</th>
+                            <th>Category</th>
+                            <th>Priority</th>
                             <th>Status</th>
+                            <th>Assigned To</th>
                             <th>Assign Officer</th>
                         </tr>
                     </thead>
@@ -123,13 +131,15 @@
 
                 <div class="form-group">
                     <label for="newEmail">Email Address</label>
-                    <input type="email" id="newEmail" class="form-control" placeholder="e.g. john.doe@miva.university" required>
+                    <input type="email" id="newEmail" class="form-control" placeholder="e.g. john.doe@miva.university"
+                        required>
                 </div>
 
                 <div class="form-group">
                     <label for="newPassword">Password</label>
                     <div class="password-group">
-                        <input type="text" id="newPassword" class="form-control" placeholder="Enter or generate a password" required>
+                        <input type="text" id="newPassword" class="form-control"
+                            placeholder="Enter or generate a password" required>
                         <button type="button" class="btn-generate" onclick="generatePassword()">🎲 Generate</button>
                     </div>
                 </div>
@@ -151,7 +161,8 @@
 
                 <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
                     <button type="button" class="btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
-                    <button type="submit" class="btn-primary" style="width: auto;" id="btnCreateUser">Create Account</button>
+                    <button type="submit" class="btn-primary" style="width: auto;" id="btnCreateUser">Create
+                        Account</button>
                 </div>
             </form>
         </div>
@@ -162,7 +173,7 @@
          ======================================== -->
     <div id="resetPasswordModal" class="modal">
         <div class="modal-content" style="width: 440px;">
-            <h3 style="margin-bottom: 0.3rem; color: #1e3a8a;">🔑 Reset Password</h3>
+            <h3 style="margin-bottom: 0.3rem; color: #1e3a8a;"> Reset Password</h3>
             <p style="color: #6b7280; font-size: 0.85rem; margin-bottom: 1rem;">
                 Set a new password for <strong id="resetUserName"></strong>
             </p>
@@ -174,22 +185,25 @@
                 <div class="form-group">
                     <label for="resetNewPassword">New Password</label>
                     <div class="password-group">
-                        <input type="text" id="resetNewPassword" class="form-control" placeholder="Enter or generate a password" required>
-                        <button type="button" class="btn-generate" onclick="generateResetPassword()">🎲 Generate</button>
+                        <input type="text" id="resetNewPassword" class="form-control"
+                            placeholder="Enter or generate a password" required>
+                        <button type="button" class="btn-generate" onclick="generateResetPassword()"> Generate</button>
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem;">
                     <button type="button" class="btn-secondary" onclick="closeResetModal()">Close</button>
-                    <button type="submit" class="btn-primary" style="width: auto;" id="btnResetPassword">Reset Password</button>
+                    <button type="submit" class="btn-primary" style="width: auto;" id="btnResetPassword">Reset
+                        Password</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <script src="js/app.js"></script>
+    <script src="js/app.js?v=4"></script>
     <script>
         verifyAccess(1); // Role 1 = Administrator
+        displayUserName();
 
         // ── Cached Data ──
         let allRoles = [];
@@ -214,43 +228,100 @@
         // SERVICE REQUESTS TAB
         // ══════════════════════════════════════════
 
-        async function loadAdminRequests() {
-            const data = await apiGet("/requests/");
-            const tbody = document.getElementById("adminTableBody");
-            if (!data || data.length === 0) {
-                tbody.innerHTML = `
-                    <tr><td colspan="4">
-                        <div class="empty-state">
-                            <div class="empty-icon">📋</div>
-                            <p>No service requests found.</p>
-                        </div>
-                    </td></tr>`;
-                return;
-            }
-            tbody.innerHTML = data.map(r => {
-                // Build the officer dropdown for this request
-                const officerOptions = allOfficers.map(o => 
-                    `<option value="${o.id}">${o.full_name}</option>`
-                ).join('');
-                
-                return `
-                    <tr>
-                        <td>#${r.id}</td>
-                        <td>${r.title}</td>
-                        <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
-                        <td>
-                            <div style="display: flex; gap: 0.4rem; align-items: center;">
-                                <select id="officer_${r.id}" class="form-control" style="width: 160px; display: inline-block; font-size: 0.85rem;">
-                                    <option value="" disabled selected>Select officer</option>
-                                    ${officerOptions}
-                                </select>
-                                <button class="btn-primary" style="width: auto; padding: 0.4rem 0.8rem;" onclick="assign(${r.id})">Assign</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+        const CATEGORY_MAP = { 1: 'Electricity', 2: 'Furniture', 3: 'Plumbing', 4: 'Internet/IT' };
+
+        function getPriorityBadge(priority) {
+            const cls = {
+                'High':   'badge-priority-high',
+                'Medium': 'badge-priority-medium',
+                'Low':    'badge-priority-low'
+            }[priority] || 'badge-priority-medium';
+            return `<span class="badge ${cls}">${priority || 'Medium'}</span>`;
         }
+
+        async function loadAdminRequests() {
+            try {
+                const data = await apiGet("/requests/");
+                if (!Array.isArray(data)) {
+                    if (data && data.detail) {
+                        showAlert(data.detail, false);
+                    }
+                    const tbody = document.getElementById("adminTableBody");
+                    tbody.innerHTML = `
+                        <tr><td colspan="8">
+                            <div class="empty-state">
+                                <div class="empty-icon">📋</div>
+                                <p>No service requests found.</p>
+                            </div>
+                        </td></tr>`;
+                    return;
+                }
+                cacheRequestsData(data);
+                const tbody = document.getElementById("adminTableBody");
+                if (data.length === 0) {
+                    tbody.innerHTML = `
+                        <tr><td colspan="8">
+                            <div class="empty-state">
+                                <div class="empty-icon">📋</div>
+                                <p>No service requests found.</p>
+                            </div>
+                        </td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = data.map(r => {
+                    const officerOptions = allOfficers.map(o =>
+                        `<option value="${o.id}">${o.full_name}</option>`
+                    ).join('');
+
+                    const categoryName = r.category ? r.category.name : (CATEGORY_MAP[r.category_id] || `Cat #${r.category_id}`);
+                    const statusText = r.status || 'Pending';
+                    const statusCls = statusText.toLowerCase().replace(/ /g, '-');
+
+                    // Show requester full name
+                    const requesterName = r.requester_name
+                        ? `<span style="font-size:0.85rem; font-weight:600; color:#374151;">${r.requester_name}</span>`
+                        : `<span style="color:#9ca3af; font-size:0.82rem;">User #${r.requester_id}</span>`;
+
+                    // Show assigned officer name if available
+                    const assignedTo = r.assigned_to_name
+                        ? `<span style="font-size:0.85rem; color:#1e3a8a; font-weight:600;">${r.assigned_to_name}</span>`
+                        : `<span style="color:#9ca3af; font-size:0.82rem;">—</span>`;
+
+                    return `
+                        <tr>
+                            <td>#${r.id}</td>
+                            <td>
+                                <a href="javascript:void(0)" onclick="openRequestDetailsModal(${r.id})" 
+                                   style="color: #1e3a8a; text-decoration: none; cursor: pointer;" 
+                                   title="Click to view request details"
+                                   onmouseover="this.style.textDecoration='underline'" 
+                                   onmouseout="this.style.textDecoration='none'">
+                                    <strong>${r.title}</strong>
+                                </a>
+                            </td>
+                            <td>${requesterName}</td>
+                            <td><span class="badge badge-category">${categoryName}</span></td>
+                            <td>${getPriorityBadge(r.priority)}</td>
+                            <td><span class="badge badge-${statusCls}">${statusText}</span></td>
+                            <td>${assignedTo}</td>
+                            <td>
+                                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                    <select id="officer_${r.id}" class="form-control" style="width: 140px; display: inline-block; font-size: 0.85rem;">
+                                        <option value="" disabled selected>Select officer</option>
+                                        ${officerOptions}
+                                    </select>
+                                    <button class="btn-primary" style="width: auto; padding: 0.4rem 0.6rem; font-size:0.82rem;" onclick="assign(${r.id})">Assign</button>
+                                    <button class="btn-secondary" style="width: auto; padding: 0.4rem 0.6rem; font-size:0.82rem;" onclick="openRequestDetailsModal(${r.id})">Details</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("Failed to load admin requests:", err);
+            }
+        }
+
 
         async function assign(reqId) {
             const select = document.getElementById(`officer_${reqId}`);
@@ -264,10 +335,10 @@
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("token")}` },
                 body: JSON.stringify({ request_id: reqId, officer_id: officerId })
             });
-            if (res.ok) { 
+            if (res.ok) {
                 const officerName = select.options[select.selectedIndex].text;
-                showAlert(`Request assigned to ${officerName}.`); 
-                loadAdminRequests(); 
+                showAlert(`Request assigned to ${officerName}.`);
+                loadAdminRequests();
             } else {
                 const data = await res.json();
                 showAlert(data.detail || "Failed to assign officer.", false);
@@ -334,30 +405,30 @@
                 // Find the current user by email
                 const me = users.find(u => u.email === payload.sub);
                 if (me) currentUserId = me.id;
-            } catch (e) {}
+            } catch (e) { }
 
             tbody.innerHTML = users.map(u => {
                 const roleName = u.role ? u.role.name : 'Unknown';
                 const badgeClass = getRoleBadgeClass(roleName);
                 const isCurrentUser = u.id === currentUserId;
-                
+
                 // Status badge
-                const statusBadge = u.is_active 
+                const statusBadge = u.is_active
                     ? '<span class="badge badge-active">Active</span>'
                     : '<span class="badge badge-suspended">Suspended</span>';
-                
+
                 // Action buttons (don't show for current user)
                 const suspendBtn = isCurrentUser ? '' : (u.is_active
-                    ? `<button class="btn-action suspend" onclick="confirmSuspend(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">⏸️ Suspend</button>`
-                    : `<button class="btn-action reactivate" onclick="confirmReactivate(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">▶️ Reactivate</button>`
+                    ? `<button class="btn-action suspend" onclick="confirmSuspend(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">⏸ Suspend</button>`
+                    : `<button class="btn-action reactivate" onclick="confirmReactivate(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">▶ Reactivate</button>`
                 );
-                
-                const actions = isCurrentUser 
+
+                const actions = isCurrentUser
                     ? '<span style="color: #9ca3af; font-size: 0.8rem;">You</span>'
                     : `<div class="action-group">
-                        <button class="btn-action reset" onclick="openResetPasswordModal(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">🔑 Reset</button>
+                        <button class="btn-action reset" onclick="openResetPasswordModal(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')"> Reset</button>
                         ${suspendBtn}
-                        <button class="btn-action delete" onclick="confirmDelete(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')">🗑️ Delete</button>
+                        <button class="btn-action delete" onclick="confirmDelete(${u.id}, '${u.full_name.replace(/'/g, "\\'")}')"> Delete</button>
                     </div>`;
 
                 return `
@@ -534,11 +605,11 @@
                         </div>
                     `;
                     resultDiv.style.display = "block";
-                    
+
                     // Hide the form since it's done
                     document.getElementById("resetPasswordForm").querySelector('.form-group').style.display = 'none';
                     btn.style.display = 'none';
-                    
+
                     loadUsers(); // Refresh to show the 🔒 indicator
                 } else {
                     showAlert(data.detail || "Failed to reset password.", false);

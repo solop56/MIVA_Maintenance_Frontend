@@ -27,6 +27,22 @@ nav h1 {
     font-size: 1.2rem;
 }
 
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.nav-greeting {
+    font-size: 0.9rem;
+    color: #e2e8f0;
+    font-weight: 500;
+}
+
+.nav-greeting strong {
+    color: #ffffff;
+}
+
 .btn-logout {
     background-color: #dc2626;
     color: white;
@@ -830,3 +846,49 @@ tbody tr {
     letter-spacing: 1px;
     user-select: all;
 }
+
+/* ================================
+   Priority Badges
+   ================================ */
+.badge-priority-high {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    color: #991b1b;
+    border: 1px solid #ef444433;
+    font-weight: 700;
+}
+
+.badge-priority-medium {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+    border: 1px solid #f59e0b33;
+    font-weight: 700;
+}
+
+.badge-priority-low {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    color: #065f46;
+    border: 1px solid #10b98133;
+    font-weight: 700;
+}
+
+/* ================================
+   Category Badge
+   ================================ */
+.badge-category {
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    color: #5b21b6;
+    border: 1px solid #7c3aed33;
+}
+
+/* ================================
+   Status: In Progress / Assigned
+   ================================ */
+.badge-in-progress {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.badge-in-progress {
+    background-color: #fef3c7;
+    color: #92400e;
+}
